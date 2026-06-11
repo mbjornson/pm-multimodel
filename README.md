@@ -12,6 +12,8 @@ It synchronizes:
 
 MCP synchronization is intentionally deferred.
 
+This gist was critical to getting everything play nice https://gist.github.com/jylkim/ab9cb20e834532ea567d767fef14d268.
+
 ## Requirements
 
 - macOS or Linux
