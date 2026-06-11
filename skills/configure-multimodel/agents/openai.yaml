@@ -1,0 +1,4 @@
+interface:
+  display_name: "Configure Multimodel"
+  short_description: "Synchronize Claude configuration across coding agents"
+  default_prompt: "Configure this repository for Claude Code, Codex, and Cursor using Claude configuration as the canonical source."

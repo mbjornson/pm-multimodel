@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "pm-multimodels",
+  "version": "0.1.0",
+  "description": "Local marketplace for the pm-multimodels Claude Code plugin.",
+  "owner": {
+    "name": "Matt Bjornson"
+  },
+  "plugins": [
+    {
+      "name": "pm-multimodels",
+      "description": "Synchronize Claude Code project guidance, skills, and commands to Codex and Cursor.",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}

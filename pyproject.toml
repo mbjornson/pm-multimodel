@@ -1,0 +1,9 @@
+[project]
+name = "pm-multimodels"
+version = "0.1.0"
+description = "Synchronize Claude Code configuration to Codex and Cursor"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

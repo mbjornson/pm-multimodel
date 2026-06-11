@@ -1,0 +1,19 @@
+{
+  "name": "pm-multimodels",
+  "version": "0.1.0",
+  "description": "Synchronize Claude Code project guidance, skills, and commands to Codex and Cursor.",
+  "author": {
+    "name": "Matt Bjornson"
+  },
+  "homepage": "https://github.com/mbjornson/pm-multimodel",
+  "repository": "https://github.com/mbjornson/pm-multimodel",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "cursor",
+    "skills",
+    "configuration"
+  ],
+  "commands": "./commands"
+}
