@@ -67,6 +67,14 @@ class SnoozeTest(unittest.TestCase):
             # snooze for a different remote version never applies
             self.assertFalse(updater.snooze_active(home, "2.0.0", now=80000.0))
 
+    def test_snooze_degradation_on_malformed_file(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            # Write a file with only two fields instead of three
+            (home / "update-snoozed").write_text("1.0.0 1\n")
+            # snooze_active should return False (not crash)
+            self.assertFalse(updater.snooze_active(home, "1.0.0", now=1000.0))
+
 
 class CacheTest(unittest.TestCase):
     def test_cache_freshness(self):
@@ -76,6 +84,14 @@ class CacheTest(unittest.TestCase):
             updater.touch_check(home, now=1000.0)
             self.assertTrue(updater.cache_fresh(home, now=1000.0 + 10))
             self.assertFalse(updater.cache_fresh(home, now=1000.0 + updater.CHECK_TTL + 1))
+
+    def test_cache_degradation_on_unparseable_file(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            # Write garbage content that can't be parsed as float
+            (home / "last-update-check").write_text("not-a-number\n")
+            # cache_fresh should return False (not crash)
+            self.assertFalse(updater.cache_fresh(home, now=1000.0))
 
 
 if __name__ == "__main__":

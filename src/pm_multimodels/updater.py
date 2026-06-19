@@ -71,13 +71,13 @@ def _read_snooze(home: Path) -> tuple[str, int, float] | None:
     path = home / "update-snoozed"
     if not path.is_file():
         return None
-    parts = path.read_text().split()
-    if len(parts) != 3:
-        return None
-    version, level, timestamp = parts
     try:
+        parts = path.read_text().split()
+        if len(parts) != 3:
+            return None
+        version, level, timestamp = parts
         return version, int(level), float(timestamp)
-    except ValueError:
+    except (ValueError, OSError):
         return None
 
 
@@ -103,7 +103,7 @@ def cache_fresh(home: Path, now: float, ttl: float = CHECK_TTL) -> bool:
         return False
     try:
         timestamp = float(path.read_text().strip())
-    except ValueError:
+    except (ValueError, OSError):
         return False
     return now - timestamp < ttl
 
