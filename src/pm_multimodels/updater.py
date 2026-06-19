@@ -60,3 +60,53 @@ def config_set(home: Path, key: str, value: str) -> None:
 
 def config_true(home: Path, key: str) -> bool:
     return config_get(home, key).lower() in {"true", "1", "yes"}
+
+
+SNOOZE_DURATIONS: dict[int, int] = {1: 86400, 2: 172800, 3: 604800}
+SNOOZE_LABELS: dict[int, str] = {1: "24h", 2: "48h", 3: "1 week"}
+CHECK_TTL = 14400  # 4 hours
+
+
+def _read_snooze(home: Path) -> tuple[str, int, float] | None:
+    path = home / "update-snoozed"
+    if not path.is_file():
+        return None
+    parts = path.read_text().split()
+    if len(parts) != 3:
+        return None
+    version, level, timestamp = parts
+    try:
+        return version, int(level), float(timestamp)
+    except ValueError:
+        return None
+
+
+def snooze(home: Path, version: str, now: float) -> str:
+    current = _read_snooze(home)
+    level = current[1] if current and current[0] == version else 0
+    new_level = min(level + 1, 3)
+    _atomic_write(home / "update-snoozed", f"{version} {new_level} {now}\n")
+    return SNOOZE_LABELS[new_level]
+
+
+def snooze_active(home: Path, version: str, now: float) -> bool:
+    current = _read_snooze(home)
+    if not current or current[0] != version:
+        return False
+    _, level, timestamp = current
+    return now < timestamp + SNOOZE_DURATIONS.get(level, 0)
+
+
+def cache_fresh(home: Path, now: float, ttl: float = CHECK_TTL) -> bool:
+    path = home / "last-update-check"
+    if not path.is_file():
+        return False
+    try:
+        timestamp = float(path.read_text().strip())
+    except ValueError:
+        return False
+    return now - timestamp < ttl
+
+
+def touch_check(home: Path, now: float) -> None:
+    _atomic_write(home / "last-update-check", f"{now}\n")
