@@ -195,5 +195,53 @@ class CheckTest(unittest.TestCase):
                 self.assertEqual("", updater.check(root=root, home=home, now=2.0))
 
 
+class UpgradeTest(unittest.TestCase):
+    def _root_with_version(self, directory: str, version: str) -> Path:
+        root = Path(directory)
+        meta = root / ".claude-plugin"
+        meta.mkdir(exist_ok=True)
+        meta.joinpath("plugin.json").write_text(json.dumps({"version": version}))
+        return root
+
+    def test_successful_upgrade_writes_marker_and_clears_caches(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            home.mkdir()
+            root = self._root_with_version(directory, "0.1.0")
+            (home / "last-update-check").write_text("123\n")
+            (home / "update-snoozed").write_text("0.2.0 1 0\n")
+
+            fake_engine = mock.Mock()
+            fake_engine.sync_global.return_value = mock.Mock(conflicts=[])
+            fake_engine.registered_repos.return_value = []
+
+            with mock.patch.object(updater, "_git") as git, \
+                 mock.patch.object(updater, "git_fetch", return_value=True), \
+                 mock.patch.object(updater, "read_version", side_effect=["0.1.0", "0.2.0"]), \
+                 mock.patch.object(updater, "SyncEngine", return_value=fake_engine), \
+                 mock.patch("pm_multimodels.updater.shutil.which", return_value=None):
+                git.return_value = mock.Mock(returncode=0, stdout="")
+                code, message = updater.upgrade(root=root, home=home, now=999.0)
+
+            self.assertEqual(0, code)
+            self.assertEqual("0.1.0", (home / "just-upgraded-from").read_text().strip())
+            self.assertFalse((home / "last-update-check").is_file())
+            self.assertFalse((home / "update-snoozed").is_file())
+            self.assertIn("0.2.0", message)
+
+    def test_failed_fetch_restores_and_does_not_mark(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            home.mkdir()
+            root = self._root_with_version(directory, "0.1.0")
+            with mock.patch.object(updater, "_git") as git, \
+                 mock.patch.object(updater, "git_fetch", return_value=False):
+                git.return_value = mock.Mock(returncode=0, stdout="")
+                code, message = updater.upgrade(root=root, home=home, now=999.0)
+            self.assertEqual(1, code)
+            self.assertFalse((home / "just-upgraded-from").is_file())
+            self.assertIn("restored", message.lower())
+
+
 if __name__ == "__main__":
     unittest.main()

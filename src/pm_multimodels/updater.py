@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
-from .engine import default_home  # noqa: F401  (re-exported for callers/tests)
+from .engine import SyncEngine, default_home  # noqa: F401  (re-exported for callers/tests)
 
 DEFAULTS: dict[str, str] = {"auto_upgrade": "false", "update_check": "true"}
 
@@ -179,3 +180,66 @@ def check(
     if not force and snooze_active(home, remote, now):
         return ""
     return f"UPGRADE_AVAILABLE {read_version(root)} {remote}"
+
+
+def upgrade(
+    *,
+    root: Path | None = None,
+    home: Path | None = None,
+    now: float,
+    runner=subprocess.run,
+) -> tuple[int, str]:
+    root = root or plugin_root()
+    home = home or default_home()
+    old_version = read_version(root)
+    head = _git(root, "rev-parse", "HEAD", check=False).stdout.strip()
+    dirty = bool(_git(root, "status", "--porcelain", check=False).stdout.strip())
+    stashed = False
+    if dirty:
+        _git(root, "stash", check=False)
+        stashed = True
+
+    try:
+        if not git_fetch(root):
+            raise RuntimeError("git fetch failed")
+        _git(root, "reset", "--hard", "origin/main")
+    except (subprocess.CalledProcessError, RuntimeError) as error:
+        if head:
+            _git(root, "reset", "--hard", head, check=False)
+        if stashed:
+            _git(root, "stash", "pop", check=False)
+        return 1, f"Upgrade failed ({error}); restored previous version."
+
+    new_version = read_version(root)
+    notes: list[str] = []
+
+    if shutil.which("claude"):
+        runner(["claude", "plugin", "marketplace", "update", "pm-multimodels"], check=False)
+        runner(["claude", "plugin", "update", "pm-multimodels@pm-multimodels"], check=False)
+    else:
+        notes.append("claude CLI not found; skipped Claude plugin reinstall.")
+
+    engine = SyncEngine()
+    if engine.sync_global(apply=True).conflicts:
+        notes.append("Global re-sync reported conflicts; run /pm-multimodels:sync --global.")
+    for repo in engine.registered_repos():
+        if engine.sync_repo(repo, apply=True).conflicts:
+            notes.append(f"Re-sync conflict in {repo}; run /pm-multimodels:sync {repo}.")
+
+    _atomic_write(home / "just-upgraded-from", f"{old_version}\n")
+    for name in ("last-update-check", "update-snoozed"):
+        path = home / name
+        if path.is_file():
+            path.unlink()
+    if stashed:
+        notes.append("Local changes were stashed; run `git stash pop` in the plugin dir.")
+
+    log = ""
+    if head:
+        log = _git(root, "log", "--oneline", f"{head}..HEAD", check=False).stdout.strip()
+
+    lines = [f"Upgraded pm-multimodels {old_version} -> {new_version}."]
+    if log:
+        lines.append("Changes:\n" + log)
+    lines.extend(notes)
+    return 0, "\n".join(lines)
