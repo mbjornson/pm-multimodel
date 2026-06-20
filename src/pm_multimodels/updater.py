@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -110,3 +111,71 @@ def cache_fresh(home: Path, now: float, ttl: float = CHECK_TTL) -> bool:
 
 def touch_check(home: Path, now: float) -> None:
     _atomic_write(home / "last-update-check", f"{now}\n")
+
+
+def _git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "-C", str(root), *args],
+        capture_output=True,
+        text=True,
+        check=check,
+    )
+
+
+def git_fetch(root: Path) -> bool:
+    try:
+        _git(root, "fetch", "--quiet", "origin", "main")
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
+def commits_behind(root: Path) -> int:
+    result = _git(root, "rev-list", "--count", "HEAD..origin/main", check=False)
+    if result.returncode != 0:
+        return 0
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return 0
+
+
+def remote_version(root: Path) -> str:
+    result = _git(root, "show", "origin/main:.claude-plugin/plugin.json", check=False)
+    if result.returncode != 0:
+        return read_version(root)
+    try:
+        return str(json.loads(result.stdout).get("version", "0.0.0"))
+    except json.JSONDecodeError:
+        return "0.0.0"
+
+
+def check(
+    *,
+    root: Path | None = None,
+    home: Path | None = None,
+    force: bool = False,
+    now: float,
+) -> str:
+    root = root or plugin_root()
+    home = home or default_home()
+
+    marker = home / "just-upgraded-from"
+    if marker.is_file():
+        from_version = marker.read_text().strip()
+        marker.unlink()
+        return f"JUST_UPGRADED {from_version} {read_version(root)}"
+
+    if not config_true(home, "update_check"):
+        return ""
+    if not force and cache_fresh(home, now):
+        return ""
+    if not git_fetch(root):
+        return ""
+    touch_check(home, now)
+    if commits_behind(root) == 0:
+        return ""
+    remote = remote_version(root)
+    if not force and snooze_active(home, remote, now):
+        return ""
+    return f"UPGRADE_AVAILABLE {read_version(root)} {remote}"

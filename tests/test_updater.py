@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest import mock
 
 from pm_multimodels import updater
 
@@ -92,6 +93,95 @@ class CacheTest(unittest.TestCase):
             (home / "last-update-check").write_text("not-a-number\n")
             # cache_fresh should return False (not crash)
             self.assertFalse(updater.cache_fresh(home, now=1000.0))
+
+
+class CheckTest(unittest.TestCase):
+    def _root_with_version(self, directory: str, version: str) -> Path:
+        root = Path(directory)
+        meta = root / ".claude-plugin"
+        meta.mkdir(exist_ok=True)
+        meta.joinpath("plugin.json").write_text(json.dumps({"version": version}))
+        return root
+
+    def test_reports_upgrade_when_behind(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            home.mkdir()
+            root = self._root_with_version(directory, "0.1.0")
+            with mock.patch.object(updater, "git_fetch", return_value=True), \
+                 mock.patch.object(updater, "commits_behind", return_value=3), \
+                 mock.patch.object(updater, "remote_version", return_value="0.2.0"):
+                line = updater.check(root=root, home=home, now=1000.0)
+            self.assertEqual("UPGRADE_AVAILABLE 0.1.0 0.2.0", line)
+
+    def test_silent_when_up_to_date(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            home.mkdir()
+            root = self._root_with_version(directory, "0.1.0")
+            with mock.patch.object(updater, "git_fetch", return_value=True), \
+                 mock.patch.object(updater, "commits_behind", return_value=0):
+                self.assertEqual("", updater.check(root=root, home=home, now=1000.0))
+
+    def test_silent_when_offline(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            home.mkdir()
+            root = self._root_with_version(directory, "0.1.0")
+            with mock.patch.object(updater, "git_fetch", return_value=False):
+                self.assertEqual("", updater.check(root=root, home=home, now=1000.0))
+
+    def test_suppressed_when_update_check_disabled(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            home.mkdir()
+            root = self._root_with_version(directory, "0.1.0")
+            updater.config_set(home, "update_check", "false")
+            with mock.patch.object(updater, "git_fetch") as fetch:
+                self.assertEqual("", updater.check(root=root, home=home, now=1000.0))
+                fetch.assert_not_called()
+
+    def test_cache_gates_network_but_force_bypasses(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            home.mkdir()
+            root = self._root_with_version(directory, "0.1.0")
+            updater.touch_check(home, now=1000.0)
+            with mock.patch.object(updater, "git_fetch") as fetch:
+                self.assertEqual("", updater.check(root=root, home=home, now=1001.0))
+                fetch.assert_not_called()
+            with mock.patch.object(updater, "git_fetch", return_value=True), \
+                 mock.patch.object(updater, "commits_behind", return_value=1), \
+                 mock.patch.object(updater, "remote_version", return_value="0.2.0"):
+                line = updater.check(root=root, home=home, force=True, now=1001.0)
+            self.assertEqual("UPGRADE_AVAILABLE 0.1.0 0.2.0", line)
+
+    def test_active_snooze_suppresses_but_force_overrides(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            home.mkdir()
+            root = self._root_with_version(directory, "0.1.0")
+            updater.snooze(home, "0.2.0", now=0.0)  # 24h window
+            with mock.patch.object(updater, "git_fetch", return_value=True), \
+                 mock.patch.object(updater, "commits_behind", return_value=1), \
+                 mock.patch.object(updater, "remote_version", return_value="0.2.0"):
+                self.assertEqual("", updater.check(root=root, home=home, now=100.0))
+                forced = updater.check(root=root, home=home, force=True, now=100.0)
+            self.assertEqual("UPGRADE_AVAILABLE 0.1.0 0.2.0", forced)
+
+    def test_just_upgraded_marker_emitted_then_cleared(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            home.mkdir()
+            root = self._root_with_version(directory, "0.2.0")
+            (home / "just-upgraded-from").write_text("0.1.0\n")
+            self.assertEqual(
+                "JUST_UPGRADED 0.1.0 0.2.0", updater.check(root=root, home=home, now=1.0)
+            )
+            self.assertFalse((home / "just-upgraded-from").is_file())
+            with mock.patch.object(updater, "git_fetch", return_value=True), \
+                 mock.patch.object(updater, "commits_behind", return_value=0):
+                self.assertEqual("", updater.check(root=root, home=home, now=2.0))
 
 
 if __name__ == "__main__":
