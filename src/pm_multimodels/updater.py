@@ -146,8 +146,8 @@ def remote_version(root: Path) -> str:
         return read_version(root)
     try:
         return str(json.loads(result.stdout).get("version", "0.0.0"))
-    except json.JSONDecodeError:
-        return "0.0.0"
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return read_version(root)
 
 
 def check(

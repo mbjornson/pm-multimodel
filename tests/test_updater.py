@@ -130,6 +130,17 @@ class CheckTest(unittest.TestCase):
             root = self._root_with_version(directory, "0.1.0")
             with mock.patch.object(updater, "git_fetch", return_value=False):
                 self.assertEqual("", updater.check(root=root, home=home, now=1000.0))
+            self.assertFalse((home / "last-update-check").is_file())
+
+    def test_remote_version_falls_back_on_bad_json(self):
+        with TemporaryDirectory() as directory:
+            root = self._root_with_version(directory, "0.1.0")
+            # Mock _git to return malformed JSON
+            mock_result = mock.MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = "not json{"
+            with mock.patch.object(updater, "_git", return_value=mock_result):
+                self.assertEqual("0.1.0", updater.remote_version(root))
 
     def test_suppressed_when_update_check_disabled(self):
         with TemporaryDirectory() as directory:
