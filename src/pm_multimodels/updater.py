@@ -196,14 +196,14 @@ def upgrade(
     dirty = bool(_git(root, "status", "--porcelain", check=False).stdout.strip())
     stashed = False
     if dirty:
-        _git(root, "stash", check=False)
-        stashed = True
+        stash_result = _git(root, "stash", check=False)
+        stashed = stash_result.returncode == 0
 
     try:
         if not git_fetch(root):
             raise RuntimeError("git fetch failed")
         _git(root, "reset", "--hard", "origin/main")
-    except (subprocess.CalledProcessError, RuntimeError) as error:
+    except (subprocess.CalledProcessError, RuntimeError, OSError) as error:
         if head:
             _git(root, "reset", "--hard", head, check=False)
         if stashed:

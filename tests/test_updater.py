@@ -236,11 +236,12 @@ class UpgradeTest(unittest.TestCase):
             root = self._root_with_version(directory, "0.1.0")
             with mock.patch.object(updater, "_git") as git, \
                  mock.patch.object(updater, "git_fetch", return_value=False):
-                git.return_value = mock.Mock(returncode=0, stdout="")
+                git.return_value = mock.Mock(returncode=0, stdout="oldhead\n")
                 code, message = updater.upgrade(root=root, home=home, now=999.0)
             self.assertEqual(1, code)
             self.assertFalse((home / "just-upgraded-from").is_file())
             self.assertIn("restored", message.lower())
+            git.assert_any_call(root, "reset", "--hard", "oldhead", check=False)
 
 
 if __name__ == "__main__":
