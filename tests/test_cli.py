@@ -49,6 +49,33 @@ class CliTest(unittest.TestCase):
             self.assertIn("update-check", repo.joinpath("AGENTS.md").read_text())
             self.assertTrue(repo.joinpath(".pm-multimodels.json").is_file())
 
+    def test_sync_without_repo_defaults_to_global(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "home"
+            skill = home / ".claude/skills/demo"
+            skill.mkdir(parents=True)
+            skill.joinpath("SKILL.md").write_text(
+                "---\nname: demo\ndescription: Demo skill\n---\n\nBody\n"
+            )
+            env = os.environ.copy()
+            env["HOME"] = str(home)
+            env["PM_MULTIMODELS_HOME"] = str(root / "state")
+            env["PYTHONPATH"] = str(ROOT / "src")
+
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/pm-multimodels"), "sync"],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertNotIn("requires a repository path", result.stderr)
+            self.assertIn(".agents/skills/demo", result.stdout)
+            self.assertIn(".cursor/skills/demo", result.stdout)
+
 
 class UpdaterCliTest(unittest.TestCase):
     def _run(self, args, root, home):
