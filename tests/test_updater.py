@@ -229,6 +229,38 @@ class UpgradeTest(unittest.TestCase):
             self.assertFalse((home / "update-snoozed").is_file())
             self.assertIn("0.2.0", message)
 
+    def test_upgrade_stashes_untracked_files_before_reset(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            home.mkdir()
+            root = self._root_with_version(directory, "0.1.0")
+
+            fake_engine = mock.Mock()
+            fake_engine.sync_global.return_value = mock.Mock(conflicts=[])
+            fake_engine.registered_repos.return_value = []
+
+            def git_side_effect(_root, *args, check=True):
+                if args == ("rev-parse", "HEAD"):
+                    return mock.Mock(returncode=0, stdout="oldhead\n")
+                if args == ("status", "--porcelain"):
+                    if git.call_count <= 2:
+                        return mock.Mock(returncode=0, stdout="?? local.txt\n")
+                    return mock.Mock(returncode=0, stdout="")
+                return mock.Mock(returncode=0, stdout="")
+
+            with mock.patch.object(updater, "_git") as git, \
+                 mock.patch.object(updater, "git_fetch", return_value=True), \
+                 mock.patch.object(updater, "read_version", side_effect=["0.1.0", "0.2.0"]), \
+                 mock.patch.object(updater, "SyncEngine", return_value=fake_engine), \
+                 mock.patch("pm_multimodels.updater.shutil.which", return_value=None):
+                git.side_effect = git_side_effect
+                code, message = updater.upgrade(root=root, home=home, now=999.0)
+
+            self.assertEqual(0, code)
+            self.assertIn("Local changes were stashed", message)
+            git.assert_any_call(root, "stash", "push", "--include-untracked", check=False)
+            git.assert_any_call(root, "reset", "--hard", "origin/main")
+
     def test_failed_fetch_restores_and_does_not_mark(self):
         with TemporaryDirectory() as directory:
             home = Path(directory) / "home"
@@ -236,7 +268,12 @@ class UpgradeTest(unittest.TestCase):
             root = self._root_with_version(directory, "0.1.0")
             with mock.patch.object(updater, "_git") as git, \
                  mock.patch.object(updater, "git_fetch", return_value=False):
-                git.return_value = mock.Mock(returncode=0, stdout="oldhead\n")
+                def git_side_effect(_root, *args, check=True):
+                    if args == ("rev-parse", "HEAD"):
+                        return mock.Mock(returncode=0, stdout="oldhead\n")
+                    return mock.Mock(returncode=0, stdout="")
+
+                git.side_effect = git_side_effect
                 code, message = updater.upgrade(root=root, home=home, now=999.0)
             self.assertEqual(1, code)
             self.assertFalse((home / "just-upgraded-from").is_file())

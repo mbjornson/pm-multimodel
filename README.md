@@ -101,6 +101,12 @@ Codex and Cursor adapters so all three tools move together. Codex and Cursor
 surface the same notice through the self-update block written into each
 configured repository's `AGENTS.md` and Cursor rule.
 
+If your plugin checkout has local changes, upgrade stashes both tracked and
+untracked files before resetting to `origin/main`. If those changes cannot be
+stashed cleanly, the upgrade stops before changing the checkout. After a
+successful upgrade with stashed changes, run `git stash pop` in the plugin
+directory when you are ready to reapply them.
+
 ### Update Configuration
 
 Config lives in `~/.pm-multimodels/config`:

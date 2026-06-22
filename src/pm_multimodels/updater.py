@@ -196,8 +196,14 @@ def upgrade(
     dirty = bool(_git(root, "status", "--porcelain", check=False).stdout.strip())
     stashed = False
     if dirty:
-        stash_result = _git(root, "stash", check=False)
+        stash_result = _git(root, "stash", "push", "--include-untracked", check=False)
         stashed = stash_result.returncode == 0
+        if not stashed:
+            return 1, "Upgrade failed; local changes could not be stashed."
+        still_dirty = bool(_git(root, "status", "--porcelain", check=False).stdout.strip())
+        if still_dirty:
+            _git(root, "stash", "pop", check=False)
+            return 1, "Upgrade failed; local changes remain after stashing."
 
     try:
         if not git_fetch(root):
