@@ -8,7 +8,8 @@ import sys
 import time
 from pathlib import Path
 
-from .engine import Report, SyncEngine
+from .engine import Report, SyncEngine, default_home
+from . import updater
 
 
 def print_report(report: Report, *, dry_run: bool) -> int:
@@ -106,6 +107,22 @@ def parser() -> argparse.ArgumentParser:
     watch = sub.add_parser("watch")
     watch.add_argument("--interval", type=float, default=2.0)
     watch.add_argument("--install-launch-agent", action="store_true")
+
+    update_check = sub.add_parser("update-check")
+    update_check.add_argument("--force", action="store_true")
+
+    sub.add_parser("upgrade")
+
+    snooze_parser = sub.add_parser("snooze")
+    snooze_parser.add_argument("version")
+
+    config_parser = sub.add_parser("config")
+    config_sub = config_parser.add_subparsers(dest="config_command", required=True)
+    config_get_parser = config_sub.add_parser("get")
+    config_get_parser.add_argument("key")
+    config_set_parser = config_sub.add_parser("set")
+    config_set_parser.add_argument("key")
+    config_set_parser.add_argument("value")
     return result
 
 
@@ -142,6 +159,27 @@ def main(argv: list[str] | None = None) -> int:
         return status
     if args.command == "doctor":
         return print_report(engine.doctor(args.repo), dry_run=True)
+    if args.command == "update-check":
+        line = updater.check(force=args.force, now=time.time())
+        if line:
+            print(line)
+        return 0
+    if args.command == "upgrade":
+        code, message = updater.upgrade(now=time.time())
+        print(message)
+        return code
+    if args.command == "snooze":
+        label = updater.snooze(default_home(), args.version, time.time())
+        print(f"Snoozed; next reminder in {label}.")
+        return 0
+    if args.command == "config":
+        home = default_home()
+        if args.config_command == "get":
+            print(updater.config_get(home, args.key))
+            return 0
+        updater.config_set(home, args.key, args.value)
+        print(f"{args.key}={args.value}")
+        return 0
     if args.install_launch_agent:
         script = Path(__file__).resolve().parents[2] / "scripts/pm-multimodels"
         return install_launch_agent(script, args.interval, engine)
