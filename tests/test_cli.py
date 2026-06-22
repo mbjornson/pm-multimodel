@@ -46,6 +46,7 @@ class CliTest(unittest.TestCase):
 
             self.assertEqual(0, applied.returncode, applied.stderr)
             self.assertTrue(repo.joinpath("AGENTS.md").is_file())
+            self.assertIn("update-check", repo.joinpath("AGENTS.md").read_text())
             self.assertTrue(repo.joinpath(".pm-multimodels.json").is_file())
 
 

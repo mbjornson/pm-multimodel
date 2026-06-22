@@ -84,6 +84,8 @@ class SyncEngine:
     ) -> Report:
         repo = repo.expanduser().resolve()
         report = Report()
+        from . import updater
+        update_command = f'python3 "{updater.plugin_root() / "scripts" / "pm-multimodels"}"'
         claude = repo / "CLAUDE.md"
         if not claude.is_file():
             report.conflicts.append(f"Missing canonical source: {claude}")
@@ -103,11 +105,11 @@ class SyncEngine:
         self._plan_file(
             report,
             agents,
-            codex_agents_adapter(claude),
+            codex_agents_adapter(claude, update_command),
             allow_replace=adopt_agents,
             reason="Codex project adapter",
         )
-        self._plan_file(report, cursor_rule, cursor_rule_adapter(claude), reason="Cursor tool adapter")
+        self._plan_file(report, cursor_rule, cursor_rule_adapter(claude, update_command), reason="Cursor tool adapter")
 
         skill_sources = self._skill_sources(repo / ".claude/skills")
         command_root = repo / ".claude/commands"

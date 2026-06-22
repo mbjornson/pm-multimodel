@@ -144,8 +144,17 @@ def adapt_codex_prompt(source: Path) -> str:
     return "\n".join(frontmatter) + f"\n\n{MARKER}\n\n{CODEX_MAPPING}\n{adapted.lstrip()}"
 
 
-def codex_agents_adapter(claude_path: Path) -> str:
+def self_update_block(update_command: str) -> str:
+    return f"""## pm-multimodels Self-Update
+
+Before doing pm-multimodels work, run `{update_command} update-check`.
+If it prints `UPGRADE_AVAILABLE <old> <new>`, tell the user a pm-multimodels update is available and offer to run `{update_command} upgrade` to install it (this also re-syncs Codex and Cursor).
+"""
+
+
+def codex_agents_adapter(claude_path: Path, update_command: str | None = None) -> str:
     source_hash = digest(claude_path.read_bytes())
+    block = f"\n{self_update_block(update_command)}" if update_command else ""
     return f"""# AGENTS.md
 
 {MARKER}
@@ -158,11 +167,12 @@ Before doing project work, read `CLAUDE.md` in full. It is the canonical source 
 {CODEX_MAPPING}
 
 When `CLAUDE.md` conflicts with this compatibility section, preserve the project intent and translate only the tool invocation. Do not edit `CLAUDE.md` as part of synchronization.
-"""
+{block}"""
 
 
-def cursor_rule_adapter(claude_path: Path) -> str:
+def cursor_rule_adapter(claude_path: Path, update_command: str | None = None) -> str:
     source_hash = digest(claude_path.read_bytes())
+    block = f"\n{self_update_block(update_command)}" if update_command else ""
     return f"""---
 description: Translate canonical CLAUDE.md tooling for Cursor Agent and Cursor CLI
 alwaysApply: true
@@ -174,4 +184,4 @@ alwaysApply: true
 `CLAUDE.md` is the canonical project instruction source.
 
 {CURSOR_MAPPING}
-"""
+{block}"""
