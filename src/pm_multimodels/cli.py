@@ -141,8 +141,7 @@ def main(argv: list[str] | None = None) -> int:
         return print_report(report, dry_run=not args.apply)
     if args.command == "sync":
         if not args.global_sync and not args.repo:
-            print("sync requires a repository path or --global", file=sys.stderr)
-            return 2
+            args.global_sync = True
         status = 0
         if args.global_sync:
             status = max(
