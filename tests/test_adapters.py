@@ -99,11 +99,13 @@ class SelfUpdateBlockTest(unittest.TestCase):
                 claude, update_command='python3 "/x/scripts/pm-multimodels"'
             )
             self.assertIn("update-check", output)
+            self.assertIn("upgrade", output)
 
     def test_adapter_omits_block_without_command(self):
         with TemporaryDirectory() as directory:
             claude = self._claude(directory)
             self.assertNotIn("Self-Update", codex_agents_adapter(claude))
+            self.assertNotIn("Self-Update", cursor_rule_adapter(claude))
 
 
 if __name__ == "__main__":
