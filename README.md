@@ -87,6 +87,40 @@ claude plugin uninstall pm-multimodels@pm-multimodels
 claude plugin marketplace remove pm-multimodels
 ```
 
+## Self-Upgrade
+
+pm-multimodels checks for its own updates when you run any of its commands.
+Detection is git-based: it compares your checkout against `origin/main`.
+
+When an update is available, Claude prompts you to install it. Installing runs:
+
+```bash
+./scripts/pm-multimodels upgrade
+```
+
+which pulls the new version, reinstalls the Claude plugin, and re-syncs the
+Codex and Cursor adapters so all three tools move together. Codex and Cursor
+surface the same notice through the self-update block written into each
+configured repository's `AGENTS.md` and Cursor rule.
+
+If your plugin checkout has local changes, upgrade stashes both tracked and
+untracked files before resetting to `origin/main`. If those changes cannot be
+stashed cleanly, the upgrade stops before changing the checkout. After a
+successful upgrade with stashed changes, run `git stash pop` in the plugin
+directory when you are ready to reapply them.
+
+### Update Configuration
+
+Config lives in `~/.pm-multimodels/config`:
+
+```bash
+./scripts/pm-multimodels config set auto_upgrade true    # install updates without asking
+./scripts/pm-multimodels config set update_check false   # stop checking for updates
+```
+
+Declining an update snoozes the reminder with escalating backoff
+(24h, then 48h, then weekly).
+
 The engine can also be used without loading the Claude plugin:
 
 ```bash
