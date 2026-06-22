@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "pm-multimodels",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local marketplace for the pm-multimodels Claude Code plugin.",
   "owner": {
     "name": "Matt Bjornson"
